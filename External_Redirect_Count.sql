@@ -2,7 +2,7 @@
 --Total number of external redirects to any brand by a user
 --Jira Ticket : https://pluralsight.atlassian.net/browse/SSPA-386
 
---This CTE contains all external links.
+--This CTE contains all external links
 WITH links_table AS(
 SELECT
 	date(to_timestamp(CREATEDAT,
@@ -53,3 +53,24 @@ GROUP BY
 	5,
 	6,
 	7;
+
+
+--Request Description
+--Total number of external redirects by year
+--Jira Ticket : https://pluralsight.atlassian.net/browse/SSPA-389
+
+--External Redirect count by year
+SELECT
+	YEAR(to_timestamp(ACCESSEDAT,
+	3)) AS Access_Year,
+	COUNT(DISTINCT ID) AS Redirect_Count
+FROM
+	DVS.CURRENT_STATE.SKILLS_LTIINTEGRATION_V1_PARTNERCONTENTACCESSED
+GROUP BY
+	1;
+
+--Overall Redirect count
+  SELECT
+	COUNT(DISTINCT ID) As Redirect_count
+FROM
+	DVS.CURRENT_STATE.SKILLS_LTIINTEGRATION_V1_PARTNERCONTENTACCESSED ;
