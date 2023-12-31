@@ -70,3 +70,33 @@ GROUP BY 1,
     2,
     3,
     4
+
+--Module & Clip level Watch duration along with clip length
+WITH cte1 AS (
+    SELECT date(LASTWATCHUTC) AS watchdate,
+        USERHANDLE,
+        MODULEID,
+        CLIPID,
+        TOTALVIEWTIMEINSECONDS,
+        CLIPLENGTHINSECONDS
+    FROM SOURCE_SYSTEM.PRODUCT.COURSE_PROGRESS_DETAIL
+    WHERE COURSEID = '7d70de87-4066-466b-8be2-e5db345b6d07'
+        AND ARCHIVEDCLIP = 'Active Clip'
+        AND MODULEID LIKE '5a91f08b-5cf0-41f2-99a4-569fac3ce091'
+),
+cte2 AS(
+    SELECT DISTINCT *
+    FROM cte1
+)
+SELECT watchdate,
+    MODULEID,
+    USERHANDLE,
+    CLIPID,
+    SUM(TOTALVIEWTIMEINSECONDS) AS View_time,
+    SUM(CLIPLENGTHINSECONDS) AS Module_length
+FROM cte2
+WHERE USERHANDLE LIKE '2e5c07ae-a4b1-4df4-a297-158a3e6d81a4'
+GROUP BY 1,
+    2,
+    3,
+    4
