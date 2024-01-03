@@ -1,5 +1,5 @@
 --TF for PS view And TF Team Summary
---TF for PS Internal Employee Overview
+
 WITH ps_users AS
 (
 SELECT
