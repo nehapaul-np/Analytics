@@ -107,3 +107,4 @@ fnl as(
 )
 
 SELECT DISTINCT  ps.email, ps.* FROM fnl ps
+-- 
