@@ -1,5 +1,3 @@
---TF for PS view And TF Team Summary
-
 WITH ps_users AS
 (
 SELECT
