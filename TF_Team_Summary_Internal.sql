@@ -13,7 +13,7 @@ with ps_users as (
     LEFT JOIN GOLD.INTEGRATION."USER" id ON
         id.email = ps.employee_email
 ), 
---TF Course Completion 
+--TF Course Completions
 tfcourse as(
   select 
     userhandle, 
