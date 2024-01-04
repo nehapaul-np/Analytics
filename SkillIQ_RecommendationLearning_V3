@@ -1,3 +1,5 @@
+--Add the User plan level details Next!
+
 WITH cte1 AS (
 SELECT
 	a.CREATE_DATE,
