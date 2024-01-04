@@ -16,19 +16,19 @@ LEFT JOIN GOLD.INTEGRATION."USER" id ON
 --tfcount
 total_tf_count AS (
 SELECT
-	DISTINCT userhandle,
-	COUNT(DISTINCT crtopicname)  AS tf_count
+	DISTINCT USERID,
+	COUNT(DISTINCT SUBJECTID)  AS tf_count
 FROM
-	DVS.CURRENT_STATE.SKILLS_CRITERIONREF_V2_USERCOMPLETIONREPORT
+	DVS.CURRENT_STATE.SKILLS_PLAN_ANALYTICS_V9_CRITERIONREFERENCEDASSESSMENTS
 WHERE
 	PASSFAILSKIPPED = 'Pass' 
-	GROUP BY 1
+	GROUP BY 1	
 ),
 
 -- TF Course Completion 
 tfcourse as(
   select 
-    userhandle, 
+    USERID, 
     max (dataflag) as Data, 
     max (cloudflag) as Cloud, 
     max (securityflag) as Security, 
@@ -44,33 +44,33 @@ tfcourse as(
   from 
     (
       select 
-        distinct userhandle, 
-        case when trim(crtopicname) like 'Data Explained' 
+        distinct userid, 
+        case when trim(SUBJECTNAME) like 'Data' 
         and passfailskipped like 'Pass' then '1' else '0' end as dataflag, 
-        case when trim(crtopicname) like 'Cloud Computing Explained' 
+        case when trim(SUBJECTNAME) like 'Cloud Computing' 
         and passfailskipped like 'Pass' then '1' else '0' end as cloudflag, 
-        case when trim(crtopicname) like 'Security Explained' 
+        case when trim(SUBJECTNAME) like 'Security' 
         and passfailskipped like 'Pass' then '1' else '0' end as securityflag, 
-        case when trim(crtopicname) like 'Automation Explained' 
+        case when trim(SUBJECTNAME) like 'Automation' 
         and passfailskipped like 'Pass' then '1' else '0' end as automationflag, 
-        case when trim(crtopicname) like 'Platforms Explained' 
+        case when trim(SUBJECTNAME) like 'Platforms' 
         and passfailskipped like 'Pass' then '1' else '0' end as platformflag, 
-        case when trim(crtopicname) = 'Artificial Intelligence Explained' 
+        case when trim(SUBJECTNAME) = 'Artificial Intelligence' 
         and passfailskipped like 'Pass' then '1' else '0' end as aiflag, 
-        case when trim(crtopicname) = '5G & IOT Explained' 
+        case when trim(SUBJECTNAME) = '5G & IOT' 
         and passfailskipped like 'Pass' then '1' else '0' end as iotflag, 
-        case when trim(crtopicname) = 'API Economy Explained' 
+        case when trim(SUBJECTNAME) = 'API Economy' 
         and passfailskipped like 'Pass' then '1' else '0' end as apiflag, 
-        case when trim(crtopicname) = 'Agile Explained' 
+        case when trim(SUBJECTNAME) = 'Agile' 
         and passfailskipped like 'Pass' then '1' else '0' end as agileflag, 
-        case when trim(crtopicname) = 'Extended Reality & the Metaverse Explained' 
+        case when trim(SUBJECTNAME) = 'Extended Reality & the Metaverse' 
         and passfailskipped like 'Pass' then '1' else '0' end as ermetaflag, 
-        case when trim(crtopicname) = 'Blockchain Explained' 
+        case when trim(SUBJECTNAME) = 'Blockchain' 
         and passfailskipped like 'Pass' then '1' else '0' end as blockchainflag, 
-        case when trim(crtopicname) = 'Software Development Explained' 
+        case when trim(SUBJECTNAME) = 'Software Development' 
         and passfailskipped like 'Pass' then '1' else '0' end as sdflag 
       from 
-        dvs.current_state.skills_criterionref_v2_usercompletionreport
+        DVS.CURRENT_STATE.SKILLS_PLAN_ANALYTICS_V9_CRITERIONREFERENCEDASSESSMENTS
     ) 
   group by 
     1
@@ -100,11 +100,10 @@ fnl as(
     coalesce(Software_Devlopment,0,'') as Software_Devlopment
   from 
     ps_users ps 
-    left join tfcourse tfc on ps.handle = tfc.userhandle
+    left join tfcourse tfc on ps.handle = tfc.userid
     LEFT JOIN total_tf_count tcount
 	ON
-	ps.handle = tcount.userhandle
+	ps.handle = tcount.userid
 )
 
-SELECT DISTINCT  ps.email, ps.* FROM fnl ps
--- 
+SELECT DISTINCT ps.* FROM fnl ps
