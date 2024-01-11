@@ -1,3 +1,4 @@
+--version1
 --Add the User plan level details Next!
 
 WITH cte1 AS (
@@ -88,3 +89,141 @@ SELECT
 	DISTINCT *
 FROM
 	cte3
+
+
+*****************************************************************************************
+--version 2
+--Model is still in my local dbt, will migrate to org dbt soon. Now model took just 12 min for last 12 months data.
+--List of Gap Recommended modules (Model_Name : NE_SKILLIQ_RECOMMENDED_MODULE)
+WITH gap_module AS (
+    SELECT
+        DATE(TO_TIMESTAMP(tim.CREATEDAT, 3)) AS create_date,
+        tim.SKILLASSESSMENTSESSIONID,
+        tim.USERHANDLE,
+        f2.value:contentId::STRING AS contentId,
+        f2.value:contentType::STRING AS contentType,
+        f2.value:courseId::STRING AS courseID
+    FROM
+        dvs.current_state.SKILLS_SKILLIQ_V1_CONTENTRECOMMENDATIONS tim,
+        LATERAL FLATTEN(INPUT => tim.GAPS) f,
+        LATERAL FLATTEN(INPUT => f.value) f1,
+        LATERAL FLATTEN(INPUT => f1.value) f2
+    WHERE
+        create_date > DATEADD(MONTH, -12, CURRENT_DATE())
+)
+
+SELECT DISTINCT
+    a.create_date,
+    a.SKILLASSESSMENTSESSIONID,
+    a.USERHANDLE,
+    a.contentId,
+    a.contentType,
+    a.courseID,
+    b.ASSESSMENT_UUID,
+    b.ASSESSMENT_NAME,
+    c.PLANID,
+    d.email
+FROM
+    gap_module a
+LEFT JOIN
+    ANALYTICS.CERTIFIED.PX_USER_SKILL_ASSESSMENT_SESSION_EXPANDED b
+ON
+    b.ASSESSMENT_SESSION_ID = a.SKILLASSESSMENTSESSIONID
+LEFT JOIN 
+    ANALYTICS.CERTIFIED.PX_ACTIVE_USERS_V2021 c
+on  
+    a.userhandle = c.USERHANDLE
+left join DVS.current_state.EXP_IDENTITY_USER d
+on 
+    a.userhandle = d.handle
+
+
+--list of clips viewed by user along with the viewtime in seconds (Model_Name : NE_CLIPVIEW_FULL)
+SELECT 
+	USERID AS Userhandle,
+    STARTUTC,
+    CLIPID,
+    VIEWTIMEINSECONDS
+FROM SOURCE_SYSTEM.MSSQL.CLIPVIEW_FULL
+where STARTUTC > DATEADD(MONTH, -12, CURRENT_DATE())
+
+--Course meta data includes Course,Module and clip details (Model_Name : NE_COURSE_METADATA)
+with course_meta as(
+    SELECT a.COURSE_ID,
+        a.COURSE_TITLE,
+        a.COURSE_IS_RETIRED,
+        a.COURSE_DURATION_IN_SECONDS as COURSE_LENGTH_SECONDS,
+        b.ID as MODULE_ID,
+        b.TITLE as MODULE_TITLE,
+        c.ID as CLIP_ID,
+        c.TITLE as CLIP_TITLE,
+        c.DURATION as CLIP_LENGTH_SECONDS,
+        SUM(c.DURATION) OVER (PARTITION BY b.ID) as MODULE_LENGTH_SECONDS
+    FROM SOURCE_SYSTEM.PRODUCT.COURSE a
+        LEFT JOIN silver.video.module b ON b.COURSEID = a.COURSE_ID
+        LEFT JOIN silver.video.clip c ON c.MODULEID = b.ID
+    GROUP BY 1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+)
+select distinct *
+from course_meta
+
+--list of users who not started,started and completed the Module after a skill IQ -Final code (Model_Name : NE_SKILLIQ_GAP_RECOMMENDEDCOURSE_PROGRESS)
+WITH gap_module_with_module_data AS (
+    SELECT
+        a.*,
+        b.MODULE_TITLE,
+        b.CLIP_ID,
+        b.CLIP_TITLE,
+        b.COURSE_TITLE,
+        b.CLIP_LENGTH_SECONDS,
+        b.MODULE_LENGTH_SECONDS
+    FROM
+        {{ref('NE_SKILLIQ_RECOMMENDED_MODULE')}} a
+    LEFT JOIN {{ref('NE_COURSE_METADATA')}} b ON
+        a.contentid = b.MODULE_ID
+),
+
+gap_module_viewtime AS (
+    SELECT
+        a.CREATE_DATE,
+        a.ASSESSMENT_UUID as skilliq_id,
+        a.ASSESSMENT_NAME as SkillIQ,
+        a.SKILLASSESSMENTSESSIONID,
+        a.USERHANDLE,
+        a.PLANID,
+        a.email,
+        a.COURSEID,
+        a.COURSE_TITLE,
+        a.contentid,
+        a.Module_title,
+        a.MODULE_LENGTH_SECONDS,
+        count(b.CLIPID),
+        count(a.Clip_id),
+        SUM(CASE WHEN b.STARTUTC >= a.CREATE_DATE THEN b.VIEWTIMEINSECONDS ELSE 0 END) AS viewtimeinsec,
+        CASE
+            WHEN SUM(CASE WHEN b.STARTUTC >= a.CREATE_DATE THEN b.VIEWTIMEINSECONDS ELSE 0 END) = 0 THEN 'Not Started'
+            WHEN COUNT(DISTINCT b.CLIPID) = COUNT(DISTINCT a.Clip_id) AND viewtimeinsec >= a.MODULE_LENGTH_SECONDS  THEN 'Completed'
+            ELSE 'Started'
+        END AS Module_Status
+    FROM
+        gap_module_with_module_data a
+    LEFT JOIN {{ref('NE_CLIPVIEW_FULL')}} b ON
+        a.Clip_id = b.CLIPID AND a.userhandle = b.Userhandle
+    GROUP BY
+        1, 2, 3, 4, 5, 6, 7, 8,9,10,11,12
+)
+
+SELECT
+   DISTINCT  *
+FROM
+    gap_module_viewtime 
+
+
