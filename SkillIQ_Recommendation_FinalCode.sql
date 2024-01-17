@@ -163,9 +163,6 @@ LEFT JOIN gap_module_details b ON
 	a.ASSESSMENTID = b.ASSESSMENT_UUID
 	AND a.ID = b.SKILLASSESSMENTSESSIONID
 
-
-
-
 --list of clips viewed by user along with the viewtime in seconds (Model_Name : NE_CLIPVIEW_FULL)
 SELECT 
 	USERID AS Userhandle,
@@ -204,7 +201,7 @@ select distinct *
 from course_meta
 
 --list of users who not started,started and completed the Module after a skill IQ -Final code (Model_Name : NE_SKILLIQ_GAP_RECOMMENDEDCOURSE_PROGRESS)
-WITH gap_module_with_module_data AS (
+WITH recommended_moduledetails AS (
     SELECT
         a.*,
         b.MODULE_TITLE,
@@ -219,13 +216,20 @@ WITH gap_module_with_module_data AS (
         a.contentid = b.MODULE_ID
 ),
 
-gap_module_viewtime AS (
+module_progress AS (
     SELECT
-        a.CREATE_DATE,
+        a.Assessment_completed_date,
+        a.Assessment_start_date,
+        a.ISHIGHERSCORE,
+	    a.Assessment_session_id,
+	    a.SCORE,
+	    a.ISRETAKE,
+	    a.PERCENTILE,
+	    a.QUINTILELEVEL,
+        a.ASSESSMENTID,
+	    a.USERHANDLE,
         a.ASSESSMENT_UUID as skilliq_id,
         a.ASSESSMENT_NAME as SkillIQ,
-        a.SKILLASSESSMENTSESSIONID,
-        a.USERHANDLE,
         a.PLANID,
         a.email,
         a.COURSEID,
@@ -233,25 +237,24 @@ gap_module_viewtime AS (
         a.contentid,
         a.Module_title,
         a.MODULE_LENGTH_SECONDS,
-        count(b.CLIPID),
-        count(a.Clip_id),
-        SUM(CASE WHEN b.STARTUTC >= a.CREATE_DATE THEN b.VIEWTIMEINSECONDS ELSE 0 END) AS viewtimeinsec,
+        count(b.CLIPID) as Clip_view_count,
+        count(a.Clip_id) as Module_clip_count,
+        SUM(CASE WHEN b.STARTUTC >= a.Assessment_completed_date THEN b.VIEWTIMEINSECONDS ELSE 0 END) AS viewtimeinsec,
         CASE
-            WHEN SUM(CASE WHEN b.STARTUTC >= a.CREATE_DATE THEN b.VIEWTIMEINSECONDS ELSE 0 END) = 0 THEN 'Not Started'
+            WHEN SUM(CASE WHEN b.STARTUTC >= a.Assessment_completed_date THEN b.VIEWTIMEINSECONDS ELSE 0 END) = 0 THEN 'Not Started'
             WHEN COUNT(DISTINCT b.CLIPID) = COUNT(DISTINCT a.Clip_id) AND viewtimeinsec >= a.MODULE_LENGTH_SECONDS  THEN 'Completed'
             ELSE 'Started'
         END AS Module_Status
     FROM
-        gap_module_with_module_data a
+        recommended_moduledetailse a
     LEFT JOIN {{ref('NE_CLIPVIEW_FULL')}} b ON
         a.Clip_id = b.CLIPID AND a.userhandle = b.Userhandle
     GROUP BY
-        1, 2, 3, 4, 5, 6, 7, 8,9,10,11,12
+        1, 2, 3, 4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19
 )
 
 SELECT
    DISTINCT  *
 FROM
-    gap_module_viewtime 
-
+    module_progress
 
