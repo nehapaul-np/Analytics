@@ -96,46 +96,74 @@ FROM
 --Model is still in my local dbt, will migrate to org dbt soon. Now model took just 12 min for last 12 months data.
 --List of Gap Recommended modules (Model_Name : NE_SKILLIQ_RECOMMENDED_MODULE)
 WITH gap_module AS (
-    SELECT
-        DATE(TO_TIMESTAMP(tim.CREATEDAT, 3)) AS create_date,
-        tim.SKILLASSESSMENTSESSIONID,
-        tim.USERHANDLE,
-        f2.value:contentId::STRING AS contentId,
-        f2.value:contentType::STRING AS contentType,
-        f2.value:courseId::STRING AS courseID
-    FROM
-        dvs.current_state.SKILLS_SKILLIQ_V1_CONTENTRECOMMENDATIONS tim,
-        LATERAL FLATTEN(INPUT => tim.GAPS) f,
-        LATERAL FLATTEN(INPUT => f.value) f1,
-        LATERAL FLATTEN(INPUT => f1.value) f2
-    WHERE
-        create_date > DATEADD(MONTH, -12, CURRENT_DATE())
-)
-
-SELECT DISTINCT
-    a.create_date,
-    a.SKILLASSESSMENTSESSIONID,
-    a.USERHANDLE,
-    a.contentId,
-    a.contentType,
-    a.courseID,
-    b.ASSESSMENT_UUID,
-    b.ASSESSMENT_NAME,
-    c.PLANID,
-    d.email
+SELECT
+	tim.SKILLASSESSMENTSESSIONID,
+	tim.USERHANDLE,
+	f2.value:contentId::STRING AS contentId,
+	f2.value:contentType::STRING AS contentType,
+	f2.value:courseId::STRING AS courseID
 FROM
-    gap_module a
+	dvs.current_state.SKILLS_SKILLIQ_V1_CONTENTRECOMMENDATIONS tim,
+	LATERAL FLATTEN(INPUT => tim.GAPS) f,
+	LATERAL FLATTEN(INPUT => f.value) f1,
+	LATERAL FLATTEN(INPUT => f1.value) f2
+),
+
+gap_module_details AS(
+SELECT
+	DISTINCT
+	a.SKILLASSESSMENTSESSIONID,
+	a.USERHANDLE,
+	a.contentId,
+	a.contentType,
+	a.courseID,
+	b.ASSESSMENT_UUID,
+	b.ASSESSMENT_NAME,
+	c.PLANID,
+	d.email
+FROM
+	gap_module a
 LEFT JOIN
     ANALYTICS.CERTIFIED.PX_USER_SKILL_ASSESSMENT_SESSION_EXPANDED b
 ON
-    b.ASSESSMENT_SESSION_ID = a.SKILLASSESSMENTSESSIONID
+	b.ASSESSMENT_SESSION_ID = a.SKILLASSESSMENTSESSIONID
 LEFT JOIN 
     ANALYTICS.CERTIFIED.PX_ACTIVE_USERS_V2021 c
-on  
-    a.userhandle = c.USERHANDLE
-left join DVS.current_state.EXP_IDENTITY_USER d
-on 
-    a.userhandle = d.handle
+ON
+	a.userhandle = c.USERHANDLE
+LEFT JOIN DVS.current_state.EXP_IDENTITY_USER D
+ON
+	a.userhandle = d.handle
+)
+
+SELECT
+	a.ASSESSMENTID,
+	a.USERHANDLE,
+	date(to_timestamp(a.COMPLETEDON,
+	3)) AS Assessment_completed_date,
+	date(to_timestamp(a.STARTEDON,
+	3)) AS Assessment_start_date,
+	a.ISHIGHERSCORE,
+	a.ID AS Assessment_session_id,
+	a.SCORE,
+	a.ISRETAKE,
+	a.PERCENTILE,
+	a.QUINTILELEVEL,
+	b.USERHANDLE as handle,
+	b.contentId,
+	b.contentType,
+	b.courseID,
+	b.ASSESSMENT_UUID,
+	b.ASSESSMENT_NAME,
+	b.PLANID,
+	b.email
+FROM
+	DVS.CURRENT_STATE.SKILLS_SKILLIQ_V3_ASSESSMENTSESSION a
+LEFT JOIN gap_module_details b ON
+	a.ASSESSMENTID = b.ASSESSMENT_UUID
+	AND a.ID = b.SKILLASSESSMENTSESSIONID
+
+
 
 
 --list of clips viewed by user along with the viewtime in seconds (Model_Name : NE_CLIPVIEW_FULL)
