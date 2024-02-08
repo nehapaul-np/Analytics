@@ -129,3 +129,62 @@ LEFT JOIN DVS.CURRENT_STATE.SKILLS_CONTENTLIBRARIES_V3_LIBRARY b ON
 GROUP BY
 	1,
 	2;
+
+--version 3 to fetch the list of Library that includes contenttype as 'links'
+WITH cte AS (
+    SELECT
+        ID,
+        SOURCE,
+        ARRAY_to_string(TAGS, ',') AS Tags
+    FROM
+        DVS.CURRENT_STATE.SKILLS_CONTENTFORMATLINKS_V1_LINK
+),
+
+cte2 AS (
+    SELECT
+        ID,
+        SOURCE,
+        Tags,
+        CASE
+            WHEN Tags LIKE '%Standalone%' AND Tags LIKE '%Qwiklabs%' THEN 'Qwiklabs_standalone'
+            WHEN SOURCE IN ('gcp', 'Qwiklabs') AND Tags LIKE '%Embedded%' THEN 'All Google Content Embedded'
+            WHEN Tags LIKE '%Standalone%' AND Tags LIKE '%Cyber Vista%' THEN 'Cyber_Vista_Standalone'
+            WHEN Tags LIKE '%IBM%' OR SOURCE LIKE '%IBM%' THEN 'IBM_Embedded'
+            WHEN Tags LIKE '%Next Tech%' THEN 'Code_Labs'
+            ELSE 'Unknown'
+        END AS Embedded_Standalone_Status
+    FROM
+        cte
+),
+
+fnl AS (
+    SELECT
+        a.*,
+        b.LIBRARYID,
+        c.TITLE
+    FROM
+        cte2 a
+    LEFT JOIN DVS.CURRENT_STATE.SKILLS_CONTENTLIBRARIES_V3_LIBRARYCONTENT b ON
+        a.ID = b.CONTENTID
+    LEFT JOIN DVS.CURRENT_STATE.SKILLS_CONTENTLIBRARIES_V3_LIBRARY c ON
+        b.LIBRARYID = c.ID
+    WHERE
+        Embedded_Standalone_Status NOT LIKE 'Unknown'
+)
+
+SELECT
+    a.LIBRARYID,
+    b.TITLE AS Library_Name,
+    COUNT(DISTINCT a.ID) AS link_count, 
+    COUNT(DISTINCT CASE WHEN a.Embedded_Standalone_Status = 'Qwiklabs_standalone' THEN a.ID END) AS Qwiklabs_standalone_Count,
+    COUNT(DISTINCT CASE WHEN a.Embedded_Standalone_Status = 'All Google Content Embedded' THEN a.ID END) AS All_Google_Content_Embedded_Count,
+    COUNT(DISTINCT CASE WHEN a.Embedded_Standalone_Status = 'Cyber_Vista_Standalone' THEN a.ID END) AS Cyber_Vista_Standalone_Count,
+    COUNT(DISTINCT CASE WHEN a.Embedded_Standalone_Status = 'IBM_Embedded' THEN a.ID END) AS IBM_Embedded_Count,
+    COUNT(DISTINCT CASE WHEN a.Embedded_Standalone_Status = 'Code_Labs' THEN a.ID END) AS Code_Labs_Count
+FROM
+fnl a 
+LEFT JOIN DVS.CURRENT_STATE.SKILLS_CONTENTLIBRARIES_V3_LIBRARY b ON
+a.LIBRARYID = b.ID 
+WHERE a.LIBRARYID IS NOT NULL 
+GROUP BY
+    a.LIBRARYID, b.TITLE;
