@@ -1,4 +1,4 @@
-WITH RECURSIVE DateRangeCTE AS (
+{# WITH RECURSIVE DateRangeCTE AS (
 SELECT
 	DISTINCT TICKET_ID,
 	MIN(date(UPDATED)) OVER(PARTITION BY TICKET_ID) AS start_date,
@@ -92,4 +92,80 @@ SELECT
 FROM
 	RankedRows
 WHERE
-	RowRank = 1;
+	RowRank = 1; #}
+
+
+
+--final script
+WITH DateRangeCTE AS (
+    SELECT
+        TICKET_ID,
+        MIN(DATE((UPDATED))) AS start_date,
+        MAX(DATE((UPDATED))) AS end_date
+    FROM
+        SOURCE_SYSTEM.ZENDESK.TICKET_FIELD_HISTORY
+    WHERE
+FIELD_NAME = 'status'
+    GROUP BY
+        TICKET_ID
+),
+
+TicketStatus AS (
+    SELECT
+        TICKET_ID,
+        DATE((UPDATED)) AS ticket_status_date,
+        UPDATED AS Date_tim,
+        VALUE AS status
+    FROM
+        SOURCE_SYSTEM.ZENDESK.TICKET_FIELD_HISTORY
+    WHERE
+FIELD_NAME = 'status'
+),
+
+FinalTicketStatus AS (
+    SELECT
+        d.TICKET_ID,
+        d.start_date,
+        d.end_date,
+        t.status,
+        t.Date_tim,
+        MAX(t.status) OVER (PARTITION BY d.TICKET_ID, grouper) AS Status_n
+    FROM
+        DateRangeCTE d
+    LEFT JOIN (
+        SELECT
+            t.*,
+            ROW_NUMBER() OVER (PARTITION BY t.TICKET_ID, DATE((t.Date_tim)) ORDER BY t.Date_tim DESC) AS grouper
+        FROM
+            TicketStatus t
+    ) t ON d.TICKET_ID = t.TICKET_ID AND DATE((t.Date_tim)) BETWEEN d.start_date AND d.end_date
+),
+
+fnl_table AS (
+    SELECT
+        f.*,
+        t.GROUP_ID,
+        T.TYPE,
+        T.PROBLEM_ID,
+        T.SUBJECT,
+        T.DESCRIPTION,
+        T.PRIORITY,
+        REPLACE(CONCAT('https://pluralsight.zendesk.com/agent/tickets/', SUBSTRING(T.url, CHARINDEX('/tickets/', T.url) + 9, LEN(T.url))), '.json', '') AS zendesk_url,
+        g."NAME" AS group_name
+    FROM
+        FinalTicketStatus f
+    LEFT JOIN FIVETRAN.ZENDESK.TICKET t ON f.TICKET_ID = t.ID
+    LEFT JOIN FIVETRAN.ZENDESK."GROUP" g ON t.GROUP_ID = g.ID
+    WHERE
+        g."NAME" IN ('Blocks', 'Billing Issues: Temp Group', 'Cloud Operations', 'Cloud SPSR', 'Cloud Tier One', 'GDPR', 'Piracy', 'Skills Content', 'Skills Escalations', 'Skills Support', 'Skills Technical Support', 'Support Coordinators')
+),
+
+RankedRows AS (
+    SELECT
+        r.*,
+        ROW_NUMBER() OVER (PARTITION BY r.start_date ORDER BY r.Date_tim DESC) AS RowRank
+    FROM
+        fnl_table r
+)
+
+SELECT * FROM RankedRows;
